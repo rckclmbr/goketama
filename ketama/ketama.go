@@ -20,12 +20,6 @@ var (
     ErrMalformedServer = errors.New("One of the servers is in an invalid format")
 )
 
-type KetamanSelector interface {
-    // PickServer returns the server address that a given item
-    // should be shared onto.
-    PickServer(key string) (net.Addr, error)
-}
-
 type mcs struct {
     point uint
     addr  net.Addr
@@ -175,16 +169,3 @@ func (cont *Continuum) PickServer(key string) (net.Addr, error) {
     }
     return cont.array[i].addr, nil
 }
-
-//func main() {
-
-    //prof, err := os.Create(profile.prof)
-    //if err != nil {
-    //    panic(err.Error())
-    //}
-    //defer prof.Close()
-    //pprof.StartCPUProfile(prof)
-    //defer pprof.StopCPUProfile()
-
-    //_, _, err := readServerDefinitions("test.txt")
-//}
