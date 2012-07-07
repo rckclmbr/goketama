@@ -16,7 +16,7 @@ import (
 )
 
 var (
-    ErrNoServers = errors.New("No valid server definitions found")
+    ErrNoServers       = errors.New("No valid server definitions found")
     ErrMalformedServer = errors.New("One of the servers is in an invalid format")
 )
 

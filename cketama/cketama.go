@@ -14,18 +14,17 @@ char* get_ketama_ip(char* key, ketama_continuum cont) {
 */
 import "C"
 import (
-    "unsafe"
     "errors"
     "net"
-    "strings"
     "reflect"
+    "strings"
+    "unsafe"
 )
 
 type Continuum struct {
-    cont *C.ketama_continuum
+    cont    *C.ketama_continuum
     addrMap map[string]net.Addr
 }
-
 
 func GetHash(in string) uint {
     val := C.CString(in)
@@ -38,7 +37,7 @@ func NewFromFile(filename string) (*Continuum, error) {
     var cont C.ketama_continuum
     fn := C.CString(filename)
     defer C.free(unsafe.Pointer(fn))
-    rv := C.ketama_roll(&cont, fn);
+    rv := C.ketama_roll(&cont, fn)
     if rv == 0 {
         errMsg := C.GoString(C.ketama_error())
         return nil, errors.New(errMsg)
@@ -58,7 +57,6 @@ func NewFromFile(filename string) (*Continuum, error) {
 
     return &Continuum{&cont, addrMap}, nil
 }
-
 
 func (cont *Continuum) String() {
     C.ketama_print_continuum(*cont.cont)

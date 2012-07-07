@@ -1,12 +1,12 @@
 package ketama
 
 import (
-    "testing"
     "strconv"
+    "testing"
 )
 
 func BenchmarkDistribution(b *testing.B) {
-    cont, _:= NewFromFile("../testdata/servers.test")
+    cont, _ := NewFromFile("../testdata/servers.test")
     for i := 0; i < b.N; i++ {
         cont.PickServer(strconv.Itoa(i))
     }
@@ -32,7 +32,7 @@ func TestContinuumDistribution(t *testing.T) {
     error := float64(target * .15)
     for _, v := range serverMap {
         v := float64(v)
-        if v > target+error || v < target-error  {
+        if v > target+error || v < target-error {
             t.Errorf("Server had %v keys, should have %v (+- 15%%)", v, target)
         }
     }
