@@ -43,3 +43,9 @@ The following are features that should be implemented, but haven't yet:
   creating a new selector, or restarting the server.
 * No concurrency/locking in Go version
 
+=======
+go-ketama
+=========
+
+A gomemcache ServerSelector using the ketama selection algorithm
+>>>>>>> cf02317c1bfdf91237fe478cd3c66c0b079096c2
