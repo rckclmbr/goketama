@@ -28,8 +28,8 @@ type mcs struct {
 type mcsArray []mcs
 
 type ServerInfo struct {
-	addr   net.Addr
-	memory uint64
+	Addr   net.Addr
+	Memory uint64
 }
 
 type Continuum struct {
@@ -44,21 +44,20 @@ func (s mcsArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s mcsArray) Sort()              { sort.Sort(s) }
 
 // Should be "servername:port\tmemory"
-func readServerDefinitions(filename string) (ss []ServerInfo, memory uint64, err error) {
+func readServerDefinitions(filename string) (ss []ServerInfo, err error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	reader := bufio.NewReader(file)
 	ss = make([]ServerInfo, 0)
-	memory = uint64(0)
 
 	for {
 		data, _, err := reader.ReadLine()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		line := string(data)
 		if strings.HasPrefix(line, "#") {
@@ -66,17 +65,16 @@ func readServerDefinitions(filename string) (ss []ServerInfo, memory uint64, err
 		}
 		addr, mem, err := getServerAddr(line)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 
 		s := ServerInfo{
-			addr:   addr,
-			memory: mem,
+			Addr:   addr,
+			Memory: mem,
 		}
 		ss = append(ss, s)
-		memory += mem
 	}
-	return ss, memory, nil
+	return ss, nil
 }
 
 func md5Digest(in []byte) []byte {
@@ -94,12 +92,16 @@ func getServerAddr(line string) (addr net.Addr, mem uint64, err error) {
 	if err != nil {
 		return nil, 0, ErrMalformedServer
 	}
-	if strings.Contains(record[0], "/") {
-		addr, err = net.ResolveUnixAddr("unix", record[0])
+	addr, err = ServerAddr(record[0])
+	return addr, mem, err
+}
+
+func ServerAddr(addr string) (net.Addr, error) {
+	if strings.Contains(addr, "/") {
+		return net.ResolveUnixAddr("unix", addr)
 	} else {
-		addr, err = net.ResolveTCPAddr("tcp", record[0])
+		return net.ResolveTCPAddr("tcp", addr)
 	}
-	return
 }
 
 func GetHash(in string) uint {
@@ -115,13 +117,24 @@ func NewFromFile(filename string) (*Continuum, error) {
 	if err != nil {
 		return nil, err
 	}
-	serverList, memory, err := readServerDefinitions(filename)
+	serverList, err := readServerDefinitions(filename)
 	if err != nil {
 		return nil, err
 	}
+	continuum := New(serverList)
+	continuum.modtime = fileInfo.ModTime()
+	return continuum, nil
+}
+
+func New(serverList []ServerInfo) *Continuum {
 	numServers := len(serverList)
-	if numServers < 1 {
-		return nil, ErrNoServers
+	if numServers == 0 {
+		panic(ErrNoServers)
+	}
+
+	var totalMemory uint64
+	for i := range serverList {
+		totalMemory += serverList[i].Memory
 	}
 
 	continuum := &Continuum{
@@ -131,11 +144,11 @@ func NewFromFile(filename string) (*Continuum, error) {
 	cont := 0
 
 	for _, server := range serverList {
-		pct := float64(server.memory) / float64(memory)
+		pct := float64(server.Memory) / float64(totalMemory)
 		ks := int(math.Floor(pct * 40.0 * float64(numServers)))
 
 		for k := 0; k < ks; k++ {
-			ss := fmt.Sprintf("%s-%v", server.addr.String(), k)
+			ss := fmt.Sprintf("%s-%v", server.Addr, k)
 			digest := md5Digest([]byte(ss))
 
 			for h := 0; h < 4; h++ {
@@ -143,7 +156,7 @@ func NewFromFile(filename string) (*Continuum, error) {
 					(uint(digest[2+h*4]) << 16) |
 					(uint(digest[1+h*4]) << 8) |
 					uint(digest[h*4]))
-				continuum.array[cont].addr = server.addr
+				continuum.array[cont].addr = server.Addr
 				cont++
 			}
 		}
@@ -151,9 +164,8 @@ func NewFromFile(filename string) (*Continuum, error) {
 
 	continuum.array.Sort()
 	continuum.numpoints = cont
-	continuum.modtime = fileInfo.ModTime()
 
-	return continuum, nil
+	return continuum
 }
 
 func (cont *Continuum) PickServer(key string) (net.Addr, error) {
