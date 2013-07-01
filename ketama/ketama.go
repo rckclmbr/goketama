@@ -43,7 +43,7 @@ func (s mcsArray) Len() int           { return len(s) }
 func (s mcsArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s mcsArray) Sort()              { sort.Sort(s) }
 
-// Should be "servername:port,memory"
+// Should be "servername:port\tmemory"
 func readServerDefinitions(filename string) (ss []ServerInfo, memory uint64, err error) {
     file, err := os.Open(filename)
     if err != nil {
@@ -135,7 +135,7 @@ func NewFromFile(filename string) (*Continuum, error) {
         ks := int(math.Floor(pct * 40.0 * float64(numServers)))
 
         for k := 0; k < ks; k++ {
-            ss := fmt.Sprintf("%s-%s", server.addr.String(), k)
+            ss := fmt.Sprintf("%s-%v", server.addr.String(), k)
             digest := md5Digest([]byte(ss))
 
             for h := 0; h < 4; h++ {
