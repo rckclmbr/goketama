@@ -148,7 +148,7 @@ func New(serverList []ServerInfo) *Continuum {
 		ks := int(math.Floor(pct * 40.0 * float64(numServers)))
 
 		for k := 0; k < ks; k++ {
-			ss := fmt.Sprintf("%s-%v", server.Addr, k)
+			ss := fmt.Sprintf("%s-%d", server.Addr, k)
 			digest := md5Digest([]byte(ss))
 
 			for h := 0; h < 4; h++ {
