@@ -181,3 +181,18 @@ func (cont *Continuum) PickServer(key string) (net.Addr, error) {
 	}
 	return cont.array[i].addr, nil
 }
+
+// Each iterates over each server calling the given function
+func (cont *Continuum) Each(f func(net.Addr) error) error {
+	seen := make(map[net.Addr]bool)
+	for _, a := range cont.array {
+		if seen[a.addr] {
+			continue
+		}
+		seen[a.addr] = true
+		if err := f(a.addr); err != nil {
+			return err
+		}
+	}
+	return nil
+}

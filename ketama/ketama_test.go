@@ -1,6 +1,7 @@
 package ketama
 
 import (
+	"net"
 	"strconv"
 	"testing"
 )
@@ -35,5 +36,20 @@ func TestContinuumDistribution(t *testing.T) {
 		if v > target+error || v < target-error {
 			t.Errorf("Server had %v keys, should have %v (+- 15%%)", v, target)
 		}
+	}
+}
+
+func TestContinuumEach(t *testing.T) {
+	cont, err := NewFromFile("../testdata/servers.test")
+	if err != nil {
+		t.Fatalf("Failed to create continuum: %v", err)
+	}
+	var count int
+	cont.Each(func(n net.Addr) error {
+		count += 1
+		return nil
+	})
+	if count != 10 {
+		t.Fatalf("did not Each() all servers")
 	}
 }
