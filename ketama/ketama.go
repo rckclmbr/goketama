@@ -28,6 +28,7 @@ type mcs struct {
 
 type mcsArray []mcs
 
+// A non-zero value for Memory enables ketama weighted
 type ServerInfo struct {
 	Addr   net.Addr
 	Memory uint64
@@ -140,18 +141,26 @@ func New(serverList []ServerInfo, newHash func() hash.Hash) *Continuum {
 		newHash = md5.New
 	}
 
+	pointsPerServer := 100
+	pointsPerHash := 1
+	if totalMemory > 0 {
+		pointsPerServer = 160
+		pointsPerHash = 4
+	}
+
 	continuum := &Continuum{
-		array:    make([]mcs, numServers*160),
-		newHash:  newHash,
+		array:   make([]mcs, numServers*pointsPerServer),
+		newHash: newHash,
 	}
 
 	cont := 0
 
-	pointsPerHash := 4
-
 	for _, server := range serverList {
-		pct := float64(server.Memory) / float64(totalMemory)
-		ks := int(math.Floor(pct * 40.0 * float64(numServers)))
+		ks := pointsPerServer / pointsPerHash
+		if totalMemory > 0 {
+			pct := float64(server.Memory) / float64(totalMemory)
+			ks = int(math.Floor(pct * 40.0 * float64(numServers)))
+		}
 
 		for k := 0; k < ks; k++ {
 			ss := fmt.Sprintf("%s-%d", server.Addr, k)
