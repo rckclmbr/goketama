@@ -22,7 +22,7 @@ var (
 )
 
 type mcs struct {
-	point uint
+	point uint32
 	addr  net.Addr
 }
 
@@ -39,6 +39,7 @@ type Continuum struct {
 	modtime   time.Time
 	array     mcsArray
 	newHash   func() hash.Hash
+	weighted  bool
 }
 
 func (s mcsArray) Less(i, j int) bool { return s[i].point < s[j].point }
@@ -101,14 +102,21 @@ func ServerAddr(addr string) (net.Addr, error) {
 	}
 }
 
-func (cont *Continuum) GetHash(in string, offset int) uint {
+func (cont *Continuum) GetHash(in string, offset int) uint32 {
 	h := cont.newHash()
 	h.Write([]byte(in))
+
+	if !cont.weighted {
+		if hh, ok := h.(hash.Hash32); ok {
+			return hh.Sum32()
+		}
+	}
+
 	digest := h.Sum(nil)
-	return ((uint(digest[3+offset*4]) << 24) |
-		(uint(digest[2+offset*4]) << 16) |
-		(uint(digest[1+offset*4]) << 8) |
-		uint(digest[offset*4]))
+	return ((uint32(digest[3+offset*4]) << 24) |
+		(uint32(digest[2+offset*4]) << 16) |
+		(uint32(digest[1+offset*4]) << 8) |
+		uint32(digest[offset*4]))
 }
 
 func NewFromFile(filename string) (*Continuum, error) {
@@ -136,6 +144,10 @@ func New(serverList []ServerInfo, newHash func() hash.Hash) *Continuum {
 	for i := range serverList {
 		totalMemory += serverList[i].Memory
 	}
+	var weighted bool
+	if totalMemory > 0 {
+		weighted = true
+	}
 
 	if newHash == nil {
 		newHash = md5.New
@@ -143,21 +155,22 @@ func New(serverList []ServerInfo, newHash func() hash.Hash) *Continuum {
 
 	pointsPerServer := 100
 	pointsPerHash := 1
-	if totalMemory > 0 {
+	if weighted {
 		pointsPerServer = 160
 		pointsPerHash = 4
 	}
 
 	continuum := &Continuum{
-		array:   make([]mcs, numServers*pointsPerServer),
-		newHash: newHash,
+		array:    make([]mcs, numServers*pointsPerServer),
+		newHash:  newHash,
+		weighted: weighted,
 	}
 
 	cont := 0
 
 	for _, server := range serverList {
 		ks := pointsPerServer / pointsPerHash
-		if totalMemory > 0 {
+		if weighted {
 			pct := float64(server.Memory) / float64(totalMemory)
 			ks = int(math.Floor(pct * 40.0 * float64(numServers)))
 		}
