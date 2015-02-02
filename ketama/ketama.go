@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"math"
 	"net"
@@ -21,12 +22,13 @@ var (
 )
 
 type mcs struct {
-	point uint
+	point uint32
 	addr  net.Addr
 }
 
 type mcsArray []mcs
 
+// A non-zero value for Memory enables ketama weighted
 type ServerInfo struct {
 	Addr   net.Addr
 	Memory uint64
@@ -36,6 +38,8 @@ type Continuum struct {
 	numpoints int
 	modtime   time.Time
 	array     mcsArray
+	newHash   func() hash.Hash
+	weighted  bool
 }
 
 func (s mcsArray) Less(i, j int) bool { return s[i].point < s[j].point }
@@ -77,12 +81,6 @@ func readServerDefinitions(filename string) (ss []ServerInfo, err error) {
 	return ss, nil
 }
 
-func md5Digest(in []byte) []byte {
-	h := md5.New()
-	h.Write(in)
-	return h.Sum(nil)
-}
-
 func getServerAddr(line string) (addr net.Addr, mem uint64, err error) {
 	record := strings.Split(string(line), "\t")
 	if len(record) != 2 {
@@ -104,12 +102,21 @@ func ServerAddr(addr string) (net.Addr, error) {
 	}
 }
 
-func GetHash(in string) uint {
-	digest := md5Digest([]byte(in))
-	return ((uint(digest[3]) << 24) |
-		(uint(digest[2]) << 16) |
-		(uint(digest[1]) << 8) |
-		uint(digest[0]))
+func (cont *Continuum) GetHash(in string, offset int) uint32 {
+	h := cont.newHash()
+	h.Write([]byte(in))
+
+	if !cont.weighted {
+		if hh, ok := h.(hash.Hash32); ok {
+			return hh.Sum32()
+		}
+	}
+
+	digest := h.Sum(nil)
+	return ((uint32(digest[3+offset*4]) << 24) |
+		(uint32(digest[2+offset*4]) << 16) |
+		(uint32(digest[1+offset*4]) << 8) |
+		uint32(digest[offset*4]))
 }
 
 func NewFromFile(filename string) (*Continuum, error) {
@@ -121,12 +128,13 @@ func NewFromFile(filename string) (*Continuum, error) {
 	if err != nil {
 		return nil, err
 	}
-	continuum := New(serverList)
+	continuum := New(serverList, nil)
 	continuum.modtime = fileInfo.ModTime()
 	return continuum, nil
 }
 
-func New(serverList []ServerInfo) *Continuum {
+// Construct a new Continum for the given servers and hashing function
+func New(serverList []ServerInfo, newHash func() hash.Hash) *Continuum {
 	numServers := len(serverList)
 	if numServers == 0 {
 		panic(ErrNoServers)
@@ -136,26 +144,41 @@ func New(serverList []ServerInfo) *Continuum {
 	for i := range serverList {
 		totalMemory += serverList[i].Memory
 	}
+	var weighted bool
+	if totalMemory > 0 {
+		weighted = true
+	}
+
+	if newHash == nil {
+		newHash = md5.New
+	}
+
+	pointsPerServer := 100
+	pointsPerHash := 1
+	if weighted {
+		pointsPerServer = 160
+		pointsPerHash = 4
+	}
 
 	continuum := &Continuum{
-		array: make([]mcs, numServers*160),
+		array:    make([]mcs, numServers*pointsPerServer),
+		newHash:  newHash,
+		weighted: weighted,
 	}
 
 	cont := 0
 
 	for _, server := range serverList {
-		pct := float64(server.Memory) / float64(totalMemory)
-		ks := int(math.Floor(pct * 40.0 * float64(numServers)))
+		ks := pointsPerServer / pointsPerHash
+		if weighted {
+			pct := float64(server.Memory) / float64(totalMemory)
+			ks = int(math.Floor(pct * 40.0 * float64(numServers)))
+		}
 
 		for k := 0; k < ks; k++ {
 			ss := fmt.Sprintf("%s-%d", server.Addr, k)
-			digest := md5Digest([]byte(ss))
-
-			for h := 0; h < 4; h++ {
-				continuum.array[cont].point = ((uint(digest[3+h*4]) << 24) |
-					(uint(digest[2+h*4]) << 16) |
-					(uint(digest[1+h*4]) << 8) |
-					uint(digest[h*4]))
+			for h := 0; h < pointsPerHash; h++ {
+				continuum.array[cont].point = continuum.GetHash(ss, h)
 				continuum.array[cont].addr = server.Addr
 				cont++
 			}
@@ -174,7 +197,7 @@ func (cont *Continuum) PickServer(key string) (net.Addr, error) {
 		return nil, ErrNoServers
 	}
 
-	h := GetHash(key)
+	h := cont.GetHash(key, 0)
 	i := sort.Search(len(cont.array), func(i int) bool { return cont.array[i].point >= h })
 	if i >= len(cont.array) {
 		i = 0
