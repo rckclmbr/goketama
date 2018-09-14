@@ -160,8 +160,20 @@ func New(serverList []ServerInfo, newHash func() hash.Hash) *Continuum {
 		pointsPerHash = 4
 	}
 
+	// Array size MUST be the same as the number of elements in it, else the Sort below
+	// will cause empty rows to be selected when picking a server and panic
+	arraySize := 0
+	for _, server := range serverList {
+		ks := pointsPerServer / pointsPerHash
+		if weighted {
+			pct := float64(server.Memory) / float64(totalMemory)
+			ks = int(math.Floor(pct * 40.0 * float64(numServers)))
+		}
+		arraySize = arraySize + ks * pointsPerHash
+	}
+
 	continuum := &Continuum{
-		array:    make([]mcs, numServers*pointsPerServer),
+		array:    make([]mcs, arraySize),
 		newHash:  newHash,
 		weighted: weighted,
 	}
